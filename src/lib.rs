@@ -7,6 +7,7 @@ use std::io::{self, Write};
 use crate::{
     config::Config,
     mlbstats::Game,
+    simba::SimbaConfig,
 };
 
 pub fn run(cfg: Config) -> Result<(), String> {
@@ -213,7 +214,7 @@ fn oracle(cfg: &Config, game: &Game) -> Result<(), String> {
     gline.predicting();
     gline.update();
 
-    let sim_result = simba::predict(&away.unwrap(), &home.unwrap());
+    let sim_result = SimbaConfig::default().run(&away.unwrap(), &home.unwrap());
     if let Err(e) = sim_result {
 	gline.backend_error();
 	gline.finalize();
