@@ -1,6 +1,5 @@
 use std::process;
 
-use mlb_oracle;
 use mlb_oracle::config::Config;
 
 fn main() {

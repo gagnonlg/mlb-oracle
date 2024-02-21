@@ -34,13 +34,13 @@ fn parse_date(datestr: &str) -> Result<String, String> {
 }
 
 impl Cli {
-    fn to_config(self) -> Result<Config, String> {
-        let date = match self.date {
-            Some(s) => parse_date(&s)?,
+    fn to_config(&self) -> Result<Config, String> {
+        let date = match &self.date {
+            Some(s) => parse_date(s)?,
             None => chrono::offset::Local::now().format("%m/%d/%Y").to_string(),
         };
         Ok(Config {
-            date: date,
+            date,
             verbose: self.verbose,
         })
     }

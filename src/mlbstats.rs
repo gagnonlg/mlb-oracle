@@ -58,7 +58,7 @@ pub fn schedule(cfg: &Config) -> Result<Vec<Game>, String> {
     let mut games: Vec<Game> = Vec::new();
 
     if let json::Value::Array(games_data) = &data["dates"] {
-        if games_data.len() == 0 {
+        if games_data.is_empty() {
 	    println!("[WARNING] No games found on this date.");
 	    return Ok(Vec::new());
         } else if games_data.len() > 1 {
@@ -127,7 +127,7 @@ fn batter_stats(cfg: &Config, data: &json::Value) -> Result<Vec<BatterStats>, St
     if let json::Value::Array(data) = data {
 	for obj in data {
             let player_id = value_to_string(obj);
-            let raw_stats = fetch_batter_stats(&cfg, &player_id)?;
+            let raw_stats = fetch_batter_stats(cfg, &player_id)?;
             let obj = &raw_stats["people"][0]["stats"][0]["splits"][0]["stat"];
             bats.push(BatterStats {
 		plate_appearances: value_to_int(&obj["plateAppearances"])?,
@@ -145,7 +145,7 @@ fn batter_stats(cfg: &Config, data: &json::Value) -> Result<Vec<BatterStats>, St
 
 fn pitcher_stats(cfg: &Config, data: &json::Value) -> Result<PitcherStats, String> {
     let player_id = value_to_string(data);
-    let raw_stats = fetch_pitcher_stats(&cfg, &player_id)?;
+    let raw_stats = fetch_pitcher_stats(cfg, &player_id)?;
     let obj = &raw_stats["people"][0]["stats"][0]["splits"][0]["stat"];
 
     Ok(PitcherStats {
@@ -212,7 +212,7 @@ fn call_curl(url: &str) -> Result<String, String> {
 }
 
 fn curl_json(url: &str) -> Result<json::Value, String> {
-    json::from_str(&call_curl(&url)?).map_err(|err| format!("{:?}", err))
+    json::from_str(&call_curl(url)?).map_err(|err| format!("{:?}", err))
 }
 
 fn value_to_int(value: &json::Value) -> Result<i32, String> {
@@ -222,7 +222,7 @@ fn value_to_int(value: &json::Value) -> Result<i32, String> {
 }
 
 fn value_to_string(value: &json::Value) -> String {
-    value.to_string().replace("\"", "")
+    value.to_string().replace('\"', "")
 }
 
 #[cfg(test)]

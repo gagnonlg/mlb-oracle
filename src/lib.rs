@@ -55,7 +55,7 @@ struct GameLine<'a> {
 impl<'a> GameLine<'a> {
     fn new(game: &'a Game) -> GameLine<'a> {
         GameLine {
-            game: &game,
+            game:&game,
             status: None,
             color: None,
         }
@@ -114,26 +114,26 @@ impl<'a> GameLine<'a> {
 		let nfull_a = (awp * nboxes_per_team as f64).round() as i32;
 		let mut line = String::new();
 		for _ in 0..(nboxes_per_team - nfull_a) {
-                    line.push_str("□");
+                    line.push('□');
 		}
 		let mut subline = String::new();
 		for _ in 0..nfull_a {
-                    subline.push_str("■");
+                    subline.push('■');
 		}
 		line.push_str(&colored_msg(colormap(awp), &subline));
 
 		// Separator
-		line.push_str(" ");
+		line.push(' ');
 
 		// Home
 		let mut subline = String::new();
 		for _ in 0..nfull_h {
-                    subline.push_str("■")
+                    subline.push('■')
 		}
 			
 		line.push_str(&colored_msg(colormap(hwp), &subline));
 		for _ in 0..(nboxes_per_team - nfull_h) {
-                    line.push_str("□");
+                    line.push('□');
 		}
 
 		self.color = None;
@@ -159,7 +159,7 @@ impl<'a> GameLine<'a> {
 
     fn finalize(&self) {
 	self.update();
-	println!("");
+	println!();
     }
 	    
     
@@ -174,7 +174,7 @@ fn colored_msg(color: TTYColor, msg: &String) -> String {
 }
 
 fn oracle(cfg: &Config, game: &Game) -> Result<(), String> {
-    let mut gline = GameLine::new(&game);
+    let mut gline = GameLine::new(game);
 
     if game.status == "Postponed" {
         gline.postponed();
@@ -185,7 +185,7 @@ fn oracle(cfg: &Config, game: &Game) -> Result<(), String> {
     gline.fetching();
     gline.update();
 
-    let result = mlbstats::teams(&cfg, &game.game_id);
+    let result = mlbstats::teams(cfg, &game.game_id);
     if let Err(e) = result {
 	gline.frontend_error();
 	gline.finalize();
