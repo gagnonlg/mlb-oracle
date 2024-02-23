@@ -45,6 +45,7 @@ pub struct Team {
     pub batters: Vec<BatterStats>,
 }
 
+// TODO: decouple from config
 pub fn schedule(cfg: &Config) -> Result<Vec<Game>, String> {
     let base_url = "https://statsapi.mlb.com/api";
     let ver = "v1";

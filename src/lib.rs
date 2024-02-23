@@ -1,5 +1,5 @@
 pub mod config;
-mod mlbstats;
+pub mod mlbstats;
 mod simba;
 
 use std::io::{self, Write};
