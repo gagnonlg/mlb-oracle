@@ -3,8 +3,11 @@ use std::error::Error;
 
 use chrono::NaiveDate;
 
-use mlb_oracle::config::Config;
-use mlb_oracle::mlbstats;
+use crate::{
+    config::Config,
+    mlbstats,
+    utils
+}
 
 fn get_datestr() -> Result<String, Box<dyn Error>> {
     let args: Vec<_> = env::args().collect();
@@ -24,6 +27,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         date: datestr,
         verbose: true,
     };
+
+    utils::init_log(cfg.verbose);
+
     let sched = mlbstats::schedule(&cfg)?;
     println!("{:#?}", sched);
     Ok(())

@@ -1,5 +1,7 @@
-use serde_json as json;
 use std::process::Command;
+
+use log;
+use serde_json as json;
 
 use crate::config::Config;
 
@@ -51,10 +53,6 @@ pub fn schedule(cfg: &Config) -> Result<Vec<Game>, String> {
     let ver = "v1";
     let url = format!("{}/{}/schedule?sportId=1&date={}", base_url, ver, cfg.date);
 
-    if cfg.verbose {
-        eprintln!("[VERBOSE] URL: {url}");
-    }
-
     let data = curl_json(&url)?;
     let mut games: Vec<Game> = Vec::new();
 
@@ -87,10 +85,6 @@ pub fn teams(cfg: &Config, game_id: &String) -> Result<(Option<Team>, Option<Tea
     let url = format!(
         "{base_url}/{ver}/game/{game_id}/feed/live?fields=liveData,boxscore,teams,players,id"
     );
-
-    if cfg.verbose {
-        eprintln!("[VERBOSE] URL={url}");
-    }
 
     let data = curl_json(&url)?;
     // println!("{:#?}", &data);
@@ -167,10 +161,6 @@ fn fetch_batter_stats(cfg: &Config, player_id: &String) -> Result<json::Value, S
         "{base_url}/{ver}/people/{player_id}?hydrate=stats(group=hitting,type=career,sportId=1),currentTeam"
     );
 
-    if cfg.verbose {
-        eprintln!("[VERBOSE] URL={url}")
-    }
-
     let data = curl_json(&url)?;
 
     // println!("{:#?}", &data);
@@ -185,16 +175,13 @@ fn fetch_pitcher_stats(cfg: &Config, player_id: &String) -> Result<json::Value, 
         "{base_url}/{ver}/people/{player_id}?hydrate=stats(group=pitching,type=career,sportId=1),currentTeam"
     );
 
-    if cfg.verbose {
-        eprintln!("[VERBOSE] URL={url}")
-    }
-
     let data = curl_json(&url)?;
 
     Ok(data)
 }
 
 fn call_curl(url: &str) -> Result<String, String> {
+    log::debug!(target: "mlbstats::call_curl", "url=\"{}\"", url);
     match Command::new("curl").args([url]).output() {
         Ok(out) => {
             if out.status.success() {

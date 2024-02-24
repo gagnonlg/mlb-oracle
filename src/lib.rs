@@ -1,8 +1,11 @@
 pub mod config;
 pub mod mlbstats;
+pub mod utils;
 mod simba;
 
 use std::io::{self, Write};
+
+use log;
 
 use crate::{
     config::Config,
@@ -11,10 +14,8 @@ use crate::{
 };
 
 pub fn run(cfg: Config) -> Result<(), String> {
-    if cfg.verbose {
-        eprintln!("[VERBOSE] cfg.date={:?}", cfg.date);
-        eprintln!("[VERBOSE] cfg.verbose={:?}", cfg.verbose);
-    }
+    utils::init_log(cfg.verbose);
+    log::debug!(target: "mlb_oracle::run", "date={:?}", cfg.date);
     for game in mlbstats::schedule(&cfg)? {
         oracle(&cfg, &game)?
     }
