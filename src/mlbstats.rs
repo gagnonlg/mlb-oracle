@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::process::Command;
 
 use log;
@@ -47,13 +48,82 @@ pub struct Team {
     pub batters: Vec<BatterStats>,
 }
 
+struct StatsApi<'a> {
+    url: String,
+    params: HashMap<&'a str, &'a str>,
+}
+
+impl<'a> StatsApi<'a> {
+    fn schedule(date: &'a str) -> StatsApi<'a> {
+	StatsApi {
+	    url: "v1/schedule".to_string(),
+	    params: HashMap::from([
+		("sportId", "1"),
+		("date", date)
+	    ])
+	}
+    }
+ 
+    fn game(game_id: &str) -> StatsApi<'a> {
+	StatsApi {
+	    url: format!("v1.1/game/{game_id}/feed/live"),
+	    params: HashMap::new(),
+	}
+    }
+
+    fn player(player_id: &str) -> StatsApi<'a> {
+	StatsApi {
+	    url: format!("v1/people/{player_id}"),
+	    params: HashMap::new()
+	}
+    }
+	    
+ 
+    fn param(mut self, k: &'a str, v: &'a str) -> Self {
+	self.params.insert(k, v);
+	self
+    }
+
+    fn build_url(&mut self) -> Result<String, String> {
+	let mut url = format!("https://statsapi.mlb.com/api/{}", self.url);
+
+	for (i, (k, v)) in self.params.iter().enumerate() {
+	    url = format!(
+		"{}{}{}={}", 
+		url,
+		if i == 0 { "?" } else { "&" },
+		k,
+		v
+	    )
+	}
+
+	Ok(url)
+    }
+
+    fn json(mut self) -> Result<json::Value, String> {
+	let url = self.build_url()?;
+	log::debug!(target: "StatsApi.json", "url={:?}", url);
+	let data = match Command::new("curl").arg(&url).output() {
+            Ok(out) => {
+		if out.status.success() {
+                    Ok(String::from_utf8(out.stdout).unwrap())
+		} else {
+                    Err(String::from_utf8(out.stderr).unwrap())
+		}
+            }
+            Err(err) => Err(format!("Error in StatsApi.json: {}", err)),
+	};
+	json::from_str(&data?).map_err(|err| format!("{:?}", err))
+    }
+}
+
+
+
+
 // TODO: decouple from config
 pub fn schedule(cfg: &Config) -> Result<Vec<Game>, String> {
-    let base_url = "https://statsapi.mlb.com/api";
-    let ver = "v1";
-    let url = format!("{}/{}/schedule?sportId=1&date={}", base_url, ver, cfg.date);
+    let data = StatsApi::schedule(&cfg.date).json()?;
 
-    let data = curl_json(&url)?;
     let mut games: Vec<Game> = Vec::new();
 
     if let json::Value::Array(games_data) = &data["dates"] {
@@ -80,18 +150,9 @@ pub fn schedule(cfg: &Config) -> Result<Vec<Game>, String> {
 }
 
 pub fn teams(cfg: &Config, game_id: &String) -> Result<(Option<Team>, Option<Team>), String> {
-    let base_url = "https://statsapi.mlb.com/api";
-    let ver = "v1.1";
-    let url = format!(
-        "{base_url}/{ver}/game/{game_id}/feed/live?fields=liveData,boxscore,teams,players,id"
-    );
-
-    let data = curl_json(&url)?;
-    // println!("{:#?}", &data);
-    // return Err("baaaz".to_string());
-
-    // let mut away_batters: Vec<BatterStats> = Vec::new();
-    // let mut home_batters: Vec<BatterStats> = Vec::new();
+    let data = StatsApi::game(game_id)
+	.param("fields", "liveData,boxscore,teams,players,id")
+	.json()?;
 
     // Heuristic to check if the lineup exists
     let away = if !data["liveData"]["boxscore"]["teams"]["away"]["pitchers"][0].is_null() {
@@ -154,54 +215,18 @@ fn pitcher_stats(cfg: &Config, data: &json::Value) -> Result<PitcherStats, Strin
     })
 }
 							  
-fn fetch_batter_stats(cfg: &Config, player_id: &String) -> Result<json::Value, String> {
-    let base_url = "https://statsapi.mlb.com/api";
-    let ver = "v1";
-    let url = format!(
-        "{base_url}/{ver}/people/{player_id}?hydrate=stats(group=hitting,type=career,sportId=1),currentTeam"
-    );
-
-    let data = curl_json(&url)?;
-
-    // println!("{:#?}", &data);
-
-    Ok(data)
+fn fetch_batter_stats(_cfg: &Config, player_id: &String) -> Result<json::Value, String> {
+    StatsApi::player(player_id)
+	.param("hydrate", "stats(group=hitting,type=career,sportId=1),currentTeam")
+	.json()
 }
 
-fn fetch_pitcher_stats(cfg: &Config, player_id: &String) -> Result<json::Value, String> {
-    let base_url = "https://statsapi.mlb.com/api";
-    let ver = "v1";
-    let url = format!(
-        "{base_url}/{ver}/people/{player_id}?hydrate=stats(group=pitching,type=career,sportId=1),currentTeam"
-    );
-
-    let data = curl_json(&url)?;
-
-    Ok(data)
+fn fetch_pitcher_stats(_cfg: &Config, player_id: &String) -> Result<json::Value, String> {
+    StatsApi::player(player_id)
+	.param("hydrate", "stats(group=pitching,type=career,sportId=1),currentTeam")
+	.json()
 }
 
-fn call_curl(url: &str) -> Result<String, String> {
-    log::debug!(target: "mlbstats::call_curl", "url=\"{}\"", url);
-    match Command::new("curl").args([url]).output() {
-        Ok(out) => {
-            if out.status.success() {
-                Ok(String::from_utf8(out.stdout).unwrap())
-            } else {
-                Err(format!(
-                    "Error in call_curl for url \"{}\": curl exited with status={}, with stderr={}",
-                    url,
-                    out.status,
-                    String::from_utf8(out.stderr).unwrap()
-                ))
-            }
-        }
-        Err(err) => Err(format!("Error in curl_json: {}", err)),
-    }
-}
-
-fn curl_json(url: &str) -> Result<json::Value, String> {
-    json::from_str(&call_curl(url)?).map_err(|err| format!("{:?}", err))
-}
 
 fn value_to_int(value: &json::Value) -> Result<i32, String> {
     value_to_string(value)

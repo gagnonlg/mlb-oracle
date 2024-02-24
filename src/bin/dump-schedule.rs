@@ -3,11 +3,11 @@ use std::error::Error;
 
 use chrono::NaiveDate;
 
-use crate::{
+use mlb_oracle::{
     config::Config,
     mlbstats,
     utils
-}
+};
 
 fn get_datestr() -> Result<String, Box<dyn Error>> {
     let args: Vec<_> = env::args().collect();
