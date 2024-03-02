@@ -16,6 +16,8 @@ pub struct Game {
 
 #[derive(Debug)]
 pub struct BatterStats {
+    pub name: String,
+    pub hand: String,
     pub plate_appearances: i32,
     pub bases_on_balls: i32,
     pub hits: i32,
@@ -27,6 +29,8 @@ pub struct BatterStats {
 
 #[derive(Debug)]
 pub struct PitcherStats {
+    pub name: String,
+    pub hand: String,
     pub batters_faced: i32,
     pub bases_on_balls: i32,
     pub hits: i32,
@@ -44,17 +48,18 @@ pub struct PitcherStats {
 
 #[derive(Debug)]
 pub struct Team {
+    pub name: String,
     pub starting_pitcher: PitcherStats,
     pub batters: Vec<BatterStats>,
 }
 
-struct StatsApi<'a> {
+pub struct StatsApi<'a> {
     url: String,
     params: HashMap<&'a str, &'a str>,
 }
 
 impl<'a> StatsApi<'a> {
-    fn schedule(date: &'a str) -> StatsApi<'a> {
+    pub fn schedule(date: &'a str) -> StatsApi<'a> {
 	StatsApi {
 	    url: "v1/schedule".to_string(),
 	    params: HashMap::from([
@@ -64,14 +69,14 @@ impl<'a> StatsApi<'a> {
 	}
     }
  
-    fn game(game_id: &str) -> StatsApi<'a> {
+    pub fn game(game_id: &str) -> StatsApi<'a> {
 	StatsApi {
 	    url: format!("v1.1/game/{game_id}/feed/live"),
 	    params: HashMap::new(),
 	}
     }
 
-    fn player(player_id: &str) -> StatsApi<'a> {
+    pub fn player(player_id: &str) -> StatsApi<'a> {
 	StatsApi {
 	    url: format!("v1/people/{player_id}"),
 	    params: HashMap::new()
@@ -79,12 +84,12 @@ impl<'a> StatsApi<'a> {
     }
 	    
  
-    fn param(mut self, k: &'a str, v: &'a str) -> Self {
+    pub fn param(mut self, k: &'a str, v: &'a str) -> Self {
 	self.params.insert(k, v);
 	self
     }
 
-    fn build_url(&mut self) -> Result<String, String> {
+    pub fn build_url(&mut self) -> Result<String, String> {
 	let mut url = format!("https://statsapi.mlb.com/api/{}", self.url);
 
 	for (i, (k, v)) in self.params.iter().enumerate() {
@@ -100,7 +105,7 @@ impl<'a> StatsApi<'a> {
 	Ok(url)
     }
 
-    fn json(mut self) -> Result<json::Value, String> {
+    pub fn json(mut self) -> Result<json::Value, String> {
 	let url = self.build_url()?;
 	log::debug!(target: "StatsApi.json", "url={:?}", url);
 	let data = match Command::new("curl").arg(&url).output() {
@@ -151,12 +156,13 @@ pub fn schedule(cfg: &Config) -> Result<Vec<Game>, String> {
 
 pub fn teams(cfg: &Config, game_id: &String) -> Result<(Option<Team>, Option<Team>), String> {
     let data = StatsApi::game(game_id)
-	.param("fields", "liveData,boxscore,teams,players,id")
+	.param("fields", "gameData,liveData,boxscore,teams,players,id,abbreviation")
 	.json()?;
 
     // Heuristic to check if the lineup exists
     let away = if !data["liveData"]["boxscore"]["teams"]["away"]["pitchers"][0].is_null() {
 	Some(Team {
+	    name: data["gameData"]["teams"]["away"]["abbreviation"].as_str().unwrap().to_string(),
 	    starting_pitcher: pitcher_stats(cfg, &data["liveData"]["boxscore"]["teams"]["away"]["pitchers"][0])?,
 	    batters: batter_stats(cfg, &data["liveData"]["boxscore"]["teams"]["away"]["battingOrder"])?
 	})
@@ -166,6 +172,7 @@ pub fn teams(cfg: &Config, game_id: &String) -> Result<(Option<Team>, Option<Tea
 
     let home = if !data["liveData"]["boxscore"]["teams"]["home"]["pitchers"][0].is_null() {
 	Some(Team {
+	    name: data["gameData"]["teams"]["home"]["abbreviation"].as_str().unwrap().to_string(),
 	    starting_pitcher: pitcher_stats(cfg, &data["liveData"]["boxscore"]["teams"]["home"]["pitchers"][0])?,
 	    batters: batter_stats(cfg, &data["liveData"]["boxscore"]["teams"]["home"]["battingOrder"])?
 	})
@@ -184,8 +191,22 @@ fn batter_stats(cfg: &Config, data: &json::Value) -> Result<Vec<BatterStats>, St
 	for obj in data {
             let player_id = value_to_string(obj);
             let raw_stats = fetch_batter_stats(cfg, &player_id)?;
+
             let obj = &raw_stats["people"][0]["stats"][0]["splits"][0]["stat"];
+
+	    let name = raw_stats["people"][0]["initLastName"]
+		.as_str()
+		.unwrap()
+		.to_string();
+
+	    let hand = format!(
+		"{}HB",
+		raw_stats["people"][0]["batSide"]["code"].as_str().unwrap()
+	    );
+
             bats.push(BatterStats {
+		name,
+		hand,
 		plate_appearances: value_to_int(&obj["plateAppearances"])?,
 		bases_on_balls: value_to_int(&obj["baseOnBalls"])?,
 		hits: value_to_int(&obj["hits"])?,
@@ -204,7 +225,19 @@ fn pitcher_stats(cfg: &Config, data: &json::Value) -> Result<PitcherStats, Strin
     let raw_stats = fetch_pitcher_stats(cfg, &player_id)?;
     let obj = &raw_stats["people"][0]["stats"][0]["splits"][0]["stat"];
 
+    let name = raw_stats["people"][0]["initLastName"]
+	.as_str()
+	.unwrap()
+	.to_string();
+    
+    let hand = format!(
+	"{}HP",
+	raw_stats["people"][0]["batSide"]["code"].as_str().unwrap()
+    );
+
     Ok(PitcherStats {
+	name,
+	hand,
 	batters_faced: value_to_int(&obj["battersFaced"])?,
 	bases_on_balls: value_to_int(&obj["baseOnBalls"])?,
 	hits: value_to_int(&obj["hits"])?,

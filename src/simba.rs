@@ -49,13 +49,13 @@ impl Default for SimbaConfig {
 
 #[derive(Clone)]
 pub struct GameState<'a> {
-    bases: [bool; 3],
-    score: Score,
-    teams: [LiveTeam<'a>; 2],
-    team_idx: i32,
-    inning: i32,
-    outs: i32,
-    live: bool,
+    pub bases: [bool; 3],
+    pub score: Score,
+    pub teams: [LiveTeam<'a>; 2],
+    pub team_idx: i32,
+    pub inning: i32,
+    pub outs: i32,
+    pub live: bool,
 }
 
 impl<'a> GameState<'a> {
@@ -215,9 +215,9 @@ pub struct SimResult {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-struct Score {
-    away: i32,
-    home: i32,
+pub struct Score {
+    pub away: i32,
+    pub home: i32,
 }
 
 impl Score {
@@ -235,9 +235,9 @@ impl Score {
 }
 
 #[derive(Clone)]
-struct LiveTeam<'a> {
-    team: &'a Team,
-    current_batter: usize,
+pub struct LiveTeam<'a> {
+    pub team: &'a Team,
+    pub current_batter: usize,
 }
 
 impl<'a> LiveTeam<'a> {
@@ -256,11 +256,11 @@ impl<'a> LiveTeam<'a> {
         };
     }
 
-    fn pitcher(&self) -> &PitcherStats {
+    pub fn pitcher(&self) -> &PitcherStats {
         &self.team.starting_pitcher
     }
 
-    fn batter(&self) -> &BatterStats {
+    pub fn batter(&self) -> &BatterStats {
         &self.team.batters[self.current_batter]
     }
 }
