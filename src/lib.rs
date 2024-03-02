@@ -10,7 +10,7 @@ use log;
 use crate::{
     config::Config,
     mlbstats::Game,
-    simba::SimbaConfig,
+    simba::{GameState, SimbaConfig},
 };
 
 pub fn run(cfg: Config) -> Result<(), String> {
@@ -215,7 +215,10 @@ fn oracle(cfg: &Config, game: &Game) -> Result<(), String> {
     gline.predicting();
     gline.update();
 
-    let sim_result = SimbaConfig::default().run(&away.unwrap(), &home.unwrap());
+    let away = away.unwrap();
+    let home = home.unwrap();
+    let gs = GameState::new(&away, &home);
+    let sim_result = SimbaConfig::default().run(&gs);
     if let Err(e) = sim_result {
 	gline.backend_error();
 	gline.finalize();

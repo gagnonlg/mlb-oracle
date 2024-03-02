@@ -16,9 +16,9 @@ pub struct SimbaConfig {
 }
 
 impl SimbaConfig {
-    pub fn run<'a>(&self, visteam: &'a Team, hometeam: &'a Team) -> Result<SimResult, String> {
+    pub fn run<'a>(&self, gamestate: &GameState) -> Result<SimResult, String> {
         let scores = iter::repeat_with(|| {
-            SimbaState::new(GameState::new(visteam, hometeam))
+            SimbaState::new(gamestate.clone())
                 .into_iter()
                 .fold_ok(Score::default(), |s, p| s.add(p.team, p.runs))
         })
@@ -47,6 +47,7 @@ impl Default for SimbaConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct GameState<'a> {
     bases: [bool; 3],
     score: Score,
@@ -58,7 +59,7 @@ pub struct GameState<'a> {
 }
 
 impl<'a> GameState<'a> {
-    fn new(visteam: &'a Team, hometeam: &'a Team) -> GameState<'a> {
+    pub fn new(visteam: &'a Team, hometeam: &'a Team) -> GameState<'a> {
         GameState {
             bases: [false, false, false],
             score: Score::default(),
@@ -152,7 +153,7 @@ struct SimbaState<'a> {
 }
 
 impl<'a> SimbaState<'a> {
-    fn new(gamestate: GameState<'a>) -> SimbaState<'a> {
+    pub fn new(gamestate: GameState<'a>) -> SimbaState<'a> {
 	SimbaState { gamestate }
     }    
 
@@ -213,7 +214,7 @@ pub struct SimResult {
     pub home_win_probability: Option<f64>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct Score {
     away: i32,
     home: i32,
@@ -233,6 +234,7 @@ impl Score {
     }
 }
 
+#[derive(Clone)]
 struct LiveTeam<'a> {
     team: &'a Team,
     current_batter: usize,
