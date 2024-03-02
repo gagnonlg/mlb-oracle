@@ -18,7 +18,7 @@ pub struct SimbaConfig {
 impl SimbaConfig {
     pub fn run<'a>(&self, visteam: &'a Team, hometeam: &'a Team) -> Result<SimResult, String> {
         let scores = iter::repeat_with(|| {
-            SimbaState::new(visteam, hometeam)
+            SimbaState::new(GameState::new(visteam, hometeam))
                 .into_iter()
                 .fold_ok(Score::default(), |s, p| s.add(p.team, p.runs))
         })
@@ -47,13 +47,7 @@ impl Default for SimbaConfig {
     }
 }
 
-struct Play {
-    team: i32,
-    runs: i32,
-    outcome: Outcome,
-}
-
-struct SimbaState<'a> {
+pub struct GameState<'a> {
     bases: [bool; 3],
     score: Score,
     teams: [LiveTeam<'a>; 2],
@@ -63,9 +57,9 @@ struct SimbaState<'a> {
     live: bool,
 }
 
-impl<'a> SimbaState<'a> {
-    fn new(visteam: &'a Team, hometeam: &'a Team) -> SimbaState<'a> {
-        SimbaState {
+impl<'a> GameState<'a> {
+    fn new(visteam: &'a Team, hometeam: &'a Team) -> GameState<'a> {
+        GameState {
             bases: [false, false, false],
             score: Score::default(),
             teams: [LiveTeam::from(visteam), LiveTeam::from(hometeam)],
@@ -76,18 +70,104 @@ impl<'a> SimbaState<'a> {
         }
     }
 
+    fn transition(&mut self, play: &Play) -> i32 {
+	let (advs, outs) = match play.outcome {
+            Outcome::Walk => (1, 0),
+            Outcome::Single => (1, 0),
+            Outcome::Double => (2, 0),
+            Outcome::Triple => (3, 0),
+            Outcome::HomeRun => (4, 0),
+            Outcome::StrikeOut => (0, 1),
+            Outcome::TagOut => (0, 1),
+            Outcome::FlyOut => (0, 1),
+        };
+
+	// Step in the batting order
+        self.teams[self.team_idx as usize].advance();
+
+        // Count runs and advance field state
+        let mut runs = 0;
+        for i in 0..advs {
+            if self.bases[2] {
+                runs += 1;
+            }
+            self.bases[2] = self.bases[1];
+            self.bases[1] = self.bases[0];
+            self.bases[0] = i == 0;
+        }
+
+        // Credit runs to offense
+        if self.team_idx == 0 {
+            self.score.away += runs;
+        } else {
+            self.score.home += runs;
+        }
+
+        // Charge outs to offense
+        self.outs += outs;
+
+        let vis_ab = self.team_idx == 0;
+        let vis_losing = self.score.home > self.score.away;
+
+	// Game is over if either:
+        // A. inning >= 9, vis at bat,  vis losing, 3 outs
+        // C. inning >= 9, home at bat, vis winning, 3 outs
+        // B. inning >= 9, home at bat, vis losing
+
+        if self.inning >= 9 {
+            if vis_ab && vis_losing && self.outs == 3 {
+                self.live = false;
+            } else if !vis_ab && !vis_losing && self.outs == 3 {
+                self.live = false;
+            } else if !vis_ab && vis_losing {
+                self.live = false
+            }
+        }
+
+        // Else, Inning is over if 3 outs
+        if self.live && self.outs == 3 {
+            self.bases[0] = false;
+            self.bases[1] = false;
+            self.bases[2] = false;
+            if self.team_idx == 1 {
+                self.inning += 1;
+            }
+            self.team_idx = 1 - self.team_idx;
+            self.outs = 0;
+        }
+
+	runs
+    }
+}
+
+
+struct Play {
+    team: i32,
+    runs: i32,
+    outcome: Outcome,
+}
+
+struct SimbaState<'a> {
+    gamestate: GameState<'a>
+}
+
+impl<'a> SimbaState<'a> {
+    fn new(gamestate: GameState<'a>) -> SimbaState<'a> {
+	SimbaState { gamestate }
+    }    
+
     fn eval(&self) -> Option<Play> {
-        if !self.live {
+        if !self.gamestate.live {
             return None;
         }
 
-        let off_idx = self.team_idx as usize;
-        let def_idx = 1 - self.team_idx as usize;
-        let batter = self.teams[off_idx].batter();
-        let pitcher = self.teams[def_idx].pitcher();
+        let off_idx = self.gamestate.team_idx as usize;
+        let def_idx = 1 - self.gamestate.team_idx as usize;
+        let batter = self.gamestate.teams[off_idx].batter();
+        let pitcher = self.gamestate.teams[def_idx].pitcher();
 
         Some(Play {
-            team: self.team_idx,
+            team: self.gamestate.team_idx,
             runs: 0, // Filled later
             outcome: OutcomeProbs::compute(pitcher, batter).sample(),
         })
@@ -95,71 +175,7 @@ impl<'a> SimbaState<'a> {
 
     fn transition(&mut self) -> Result<Option<Play>, String> {
         if let Some(play) = self.eval() {
-            let (advs, outs) = match play.outcome {
-                Outcome::Walk => (1, 0),
-                Outcome::Single => (1, 0),
-                Outcome::Double => (2, 0),
-                Outcome::Triple => (3, 0),
-                Outcome::HomeRun => (4, 0),
-                Outcome::StrikeOut => (0, 1),
-                Outcome::TagOut => (0, 1),
-                Outcome::FlyOut => (0, 1),
-            };
-
-            // Step in the batting order
-            self.teams[self.team_idx as usize].advance();
-
-            // Count runs and advance field state
-            let mut runs = 0;
-            for i in 0..advs {
-                if self.bases[2] {
-                    runs += 1;
-                }
-                self.bases[2] = self.bases[1];
-                self.bases[1] = self.bases[0];
-                self.bases[0] = i == 0;
-            }
-
-            // Credit runs to offense
-            if self.team_idx == 0 {
-                self.score.away += runs;
-            } else {
-                self.score.home += runs;
-            }
-
-            // Charge outs to offense
-            self.outs += outs;
-
-            let vis_ab = self.team_idx == 0;
-            let vis_losing = self.score.home > self.score.away;
-
-            // Game is over if either:
-            // A. inning >= 9, vis at bat,  vis losing, 3 outs
-            // C. inning >= 9, home at bat, vis winning, 3 outs
-            // B. inning >= 9, home at bat, vis losing
-
-            if self.inning >= 9 {
-                if vis_ab && vis_losing && self.outs == 3 {
-                    self.live = false;
-                } else if !vis_ab && !vis_losing && self.outs == 3 {
-                    self.live = false;
-                } else if !vis_ab && vis_losing {
-                    self.live = false
-                }
-            }
-
-            // Else, Inning is over if 3 outs
-            if self.live && self.outs == 3 {
-                self.bases[0] = false;
-                self.bases[1] = false;
-                self.bases[2] = false;
-                if self.team_idx == 1 {
-                    self.inning += 1;
-                }
-                self.team_idx = 1 - self.team_idx;
-                self.outs = 0;
-            }
-
+	    let runs = self.gamestate.transition(&play);
             Ok(Some(Play { runs, ..play }))
         } else {
             Ok(None)
